@@ -1,6 +1,6 @@
 Temple Study — weekend project scaffold
 
-This repository is a file structure and team handoff, not a finished study app. It contains a runnable Next.js landing placeholder, route stubs that return HTTP 501, configuration templates, and implementation notes. The four owners can fill their files independently and integrate one demonstrable flow by Sunday. This project is not affiliated with Temple University.
+This repository is a file structure and team handoff, not a finished study app. It contains a runnable Next.js landing placeholder, route stubs that return HTTP 501, configuration templates, and implementation notes. Everyone can independently edit their own files. 
 
 Goal and weekend boundary
 
