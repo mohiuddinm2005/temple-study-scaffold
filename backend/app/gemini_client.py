@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from collections.abc import AsyncIterator
 
@@ -7,15 +8,21 @@ from google.genai import types as genai_types
 
 from app.config import get_settings
 
+logger = logging.getLogger("nemo.gemini")
+
 # Per docs/AI_AND_HABITS.md: one short next study task, an active-recall or
 # practice step, a time box, and a way to check the answer. No PII, no full
-# Canvas feed, no grade talk in the prompt or the output.
+# Canvas feed, no grade talk in the prompt or the output -- the model has no
+# way to know a student's actual grades, so asking it to predict an
+# "achievable grade" produces confident-sounding guesses with no basis. Keep
+# this guardrail; it protects students from misleading academic-standing
+# claims, not just legal exposure.
+
 _SYSTEM_PROMPT = (
     "You are a study coach. Given an assignment title and a topic a student finds "
-    "difficult, write a curated 3-4 sentence response with short, "
-    "concrete next study task: one active-recall or "
+    "difficult, write ONE short, concrete next study task: one active-recall or "
     "practice step, a time box, and how to check the answer. Two to four sentences. "
-    "Speak about what achievable grade the student can realistically get."
+    "No grade talk, no moralizing, no guarantees, no academic-standing claims."
 )
 
 
@@ -31,18 +38,21 @@ async def _stream_producer(
     client: genai.Client, model: str, prompt: str, max_tokens: int, queue: asyncio.Queue
 ) -> None:
     try:
-        async for chunk in client.aio.models.generate_content_stream(
+        stream = await client.aio.models.generate_content_stream(
             model=model,
             contents=prompt,
             config=genai_types.GenerateContentConfig(
                 max_output_tokens=max_tokens,
                 system_instruction=_SYSTEM_PROMPT,
             ),
-        ):
+        )
+        async for chunk in stream:
             if chunk.text:
                 await queue.put(("chunk", chunk.text))
         await queue.put(("done", None))
     except Exception as exc:  # noqa: BLE001 - any provider failure falls back to the template
+        # THIS is the line that was missing: log the real error so failures can be traced back
+        logger.exception("Gemini streaming request failed, falling back to template")
         await queue.put(("error", str(exc)))
 
 
@@ -54,9 +64,10 @@ async def generate_study_task(
     API key is missing, the request errors, or it exceeds the configured timeout -- unless
     the model had already started streaming, in which case the partial model output stands."""
     settings = get_settings()
-    minutes = max(5, min(int(minutes), 25))
+    minutes = max(5, min(int(minutes), 30))
 
     if not settings.gemini_api_key:
+        logger.warning("GEMINI_API_KEY is not set; using template fallback")
         yield ("chunk", _template_task(difficult_topic, minutes))
         yield ("done", "template")
         return
@@ -79,6 +90,7 @@ async def generate_study_task(
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
+                logger.warning("Gemini request timed out after %ss", settings.gemini_timeout_seconds)
                 raise TimeoutError
             kind, payload = await asyncio.wait_for(queue.get(), timeout=remaining)
             if kind == "chunk":
@@ -87,7 +99,7 @@ async def generate_study_task(
             elif kind == "done":
                 finished_cleanly = True
                 break
-            else:  # "error"
+            else:  # "error" -- already logged in _stream_producer above
                 break
     except (TimeoutError, asyncio.TimeoutError):
         pass
@@ -95,7 +107,7 @@ async def generate_study_task(
         producer.cancel()
 
     if got_any_text:
-        yield ("done", "model" if finished_cleanly else "model")
+        yield ("done", "model")
     else:
         yield ("chunk", _template_task(difficult_topic, minutes))
         yield ("done", "template")
