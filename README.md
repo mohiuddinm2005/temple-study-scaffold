@@ -84,7 +84,7 @@ COOKIE_SECURE=false
 
 # Optional: leave the API key blank to use the study-task template.
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 GEMINI_MAX_OUTPUT_TOKENS=300
 GEMINI_TIMEOUT_SECONDS=12
 
@@ -150,7 +150,7 @@ Open <http://localhost:5173>. `--strictPort` prevents Vite from silently switchi
 | `ALLOWED_ORIGINS` | `backend/.env` | Comma-separated frontend origins; defaults to `http://localhost:5173`. Used for CORS and origin checks. |
 | `COOKIE_SECURE` | `backend/.env` | Defaults to `false` for local HTTP. `true` enables Secure cookies and switches SameSite to None; requires HTTPS. |
 | `GEMINI_API_KEY` | `backend/.env` | Optional; absence selects the template path. |
-| `GEMINI_MODEL` | `backend/.env` | Configured default is `gemini-2.5-flash`; live access depends on the provider/account. |
+| `GEMINI_MODEL` | `backend/.env` | Configured default is `gemini-3.8-flash`; live access depends on the provider/account. |
 | `GEMINI_MAX_OUTPUT_TOKENS` | `backend/.env` | Integer output cap; defaults to `300`. |
 | `GEMINI_TIMEOUT_SECONDS` | `backend/.env` | Integer request timeout; defaults to `12`. |
 | `TWILIO_ACCOUNT_SID` | `backend/.env` | Twilio account identifier for SMS. |
@@ -189,12 +189,12 @@ Grade example: target `70`, earned weighted points `42`, remaining weight `40` y
 The server checks the session and Origin when opening the connection. Send:
 
 ```json
-{"assignmentTitle":"Algebra practice","difficultTopic":"Factoring","minutes":15}
+{"assignmentTitle":"Algebra practice","course":"MATH-1021","difficultTopic":"Factoring","minutes":15}
 ```
 
 It emits `{"type":"chunk","text":"..."}` messages, then `{"type":"done","source":"model"}` or `{"type":"done","source":"template"}`. Validation errors use `{"type":"error","message":"..."}`.
 
-**One connection can accept multiple sequential requests.** The current frontend opens a connection for each submitted task and closes the previous connection before starting another. A `done` message does not close the server connection. Requests use assignment title, difficult topic, and time available; the model does not calculate grades. If generation fails after text has already streamed, the current implementation keeps that partial text and labels it `model`; template fallback applies when no model text was produced.
+**One connection can accept multiple sequential requests.** The current frontend opens a connection for each submitted task and closes the previous connection before starting another. A `done` message does not close the server connection. Requests use assignment title, course, optional difficult topic, and time available; the model does not calculate grades. If generation fails after text has already streamed, the current implementation keeps that partial text and labels it `model`; template fallback applies when no model text was produced.
 
 ## Verification and troubleshooting
 

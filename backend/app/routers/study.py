@@ -29,17 +29,18 @@ async def study_plan(websocket: WebSocket):
         while True:
             payload = await websocket.receive_json()
             assignment_title = str(payload.get("assignmentTitle", ""))[:MAX_TITLE_LEN]
+            course = str(payload.get("course", "")).strip()[:MAX_TITLE_LEN]
             difficult_topic = str(payload.get("difficultTopic", ""))[:MAX_TOPIC_LEN]
             try:
                 minutes = int(payload.get("minutes", 20))
             except (TypeError, ValueError):
                 minutes = 20
 
-            if not assignment_title or not difficult_topic:
-                await websocket.send_json({"type": "error", "message": "assignmentTitle and difficultTopic are required"})
+            if not assignment_title.strip():
+                await websocket.send_json({"type": "error", "message": "assignmentTitle is required"})
                 continue
 
-            async for kind, value in generate_study_task(assignment_title, difficult_topic, minutes):
+            async for kind, value in generate_study_task(assignment_title, difficult_topic, minutes, course):
                 if kind == "chunk":
                     await websocket.send_json({"type": "chunk", "text": value})
                 else:

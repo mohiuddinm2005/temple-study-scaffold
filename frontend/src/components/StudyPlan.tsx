@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { requestStudyTask, type StudyPlanEvent } from '../api/studyPlanSocket';
 import type { Assignment } from '../types';
+import { parseCourseCode } from '../lib/course';
 
 export default function StudyPlan({ assignments }: { assignments: Assignment[] }) {
   const [assignmentId, setAssignmentId] = useState('');
@@ -15,7 +16,8 @@ export default function StudyPlan({ assignments }: { assignments: Assignment[] }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const assignment = assignments.find((item) => item.id === assignmentId);
-    if (!assignment || !difficultTopic.trim()) return;
+    if (!assignment) return;
+    const { title, code } = parseCourseCode(assignment.title);
 
     closeRef.current?.();
     setTask('');
@@ -24,7 +26,7 @@ export default function StudyPlan({ assignments }: { assignments: Assignment[] }
     setStreaming(true);
 
     closeRef.current = requestStudyTask(
-      { assignmentTitle: assignment.title, difficultTopic: difficultTopic.trim(), minutes },
+      { assignmentTitle: title, course: code === 'Other' ? '' : code, difficultTopic: difficultTopic.trim(), minutes },
       {
         onEvent: (event: StudyPlanEvent) => {
           if (event.type === 'chunk') setTask((current) => current + event.text);
@@ -50,13 +52,13 @@ export default function StudyPlan({ assignments }: { assignments: Assignment[] }
           </select>
         </label>
         <label>
-          What's difficult about it?
+          What's difficult about it? (optional)
           <input
             type="text"
             value={difficultTopic}
             onChange={(event) => setDifficultTopic(event.target.value)}
             maxLength={300}
-            required
+            placeholder="Leave blank for a suggestion based on the assignment"
           />
         </label>
         <label>
@@ -74,7 +76,7 @@ export default function StudyPlan({ assignments }: { assignments: Assignment[] }
       {task && (
         <p role="status">
           {task}
-          {source && <em> ({source === 'model' ? 'AI-generated' : 'template'})</em>}
+          {source && <em> ({source === 'model' ? 'AI-generated' : 'Assignment-based fallback — AI is unavailable'})</em>}
         </p>
       )}
       {error && <p role="alert">{error}</p>}
