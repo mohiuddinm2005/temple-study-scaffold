@@ -58,16 +58,21 @@ export default function GradeScenario() {
           />
         </label>
         <label>
-          Remaining weight (0-100)
+          Percent of your final grade still to be graded (0–100)
           <input
             type="number"
             min={0}
             max={100}
             value={remainingWeight}
+            aria-describedby="remaining-grade-help"
             onChange={(e) => setRemainingWeight(Number(e.target.value))}
             required
           />
         </label>
+        <small id="remaining-grade-help">
+          Add up the percentages for work that hasn't been graded yet, using your syllabus.
+          For example, if only a final exam worth 30% is left, enter 30.
+        </small>
         <button disabled={busy}>{busy ? 'Calculating…' : 'Calculate'}</button>
       </form>
       {error && <p role="alert">{error}</p>}
