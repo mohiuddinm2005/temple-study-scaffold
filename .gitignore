@@ -1,0 +1,33 @@
+# Next.js / Node
+node_modules/
+.next/
+./venv
+
+# .env files
+.env
+.env.local
+
+# Backend
+backend/.venv/
+backend/data/
+backend/.env
+backend/__pycache__/
+backend/**/__pycache__/
+__pycache__/
+
+*.pyc
+
+# Frontend
+frontend/dist/
+frontend/.env.local
+
+# Local data and generated files
+data/*
+!data/.gitkeep
+*.db
+*.db-*
+*.sqlite*
+*.log
+*.tsbuildinfo
+coverage/
+.DS_Store
