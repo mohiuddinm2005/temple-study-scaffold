@@ -43,14 +43,6 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
-def hash_invite_code(code: str) -> bytes:
-    return _scrypt(code, b"pilot-invite", 32)
-
-
-def invite_code_matches(provided: str, expected: str) -> bool:
-    return hmac.compare_digest(hash_invite_code(provided), hash_invite_code(expected))
-
-
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 

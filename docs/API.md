@@ -6,7 +6,7 @@ All endpoints are same-origin JSON over HTTPS, scoped to the authenticated stude
 
 | Endpoint | Input | Proposed response | Owner |
 | --- | --- | --- | --- |
-| `POST /api/auth/register` | email, password, invite code | student summary; HTTP-only session cookie | 2 |
+| `POST /api/auth/register` | email, password | student summary; HTTP-only session cookie | 2 |
 | `POST /api/auth/login` | email, password | student summary; session cookie | 2 |
 | `POST /api/auth/logout` | empty | `{ok:true}` | 2 |
 | `GET /api/auth/me` | none | student summary or unauthenticated state | 2 |
