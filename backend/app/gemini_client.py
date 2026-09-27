@@ -2,7 +2,8 @@ import asyncio
 import time
 from collections.abc import AsyncIterator
 
-from google import genai, genai_types
+from google import genai
+from google.genai import types as genai_types
 
 from app.config import get_settings
 
