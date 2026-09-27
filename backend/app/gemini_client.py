@@ -3,7 +3,6 @@ import time
 from collections.abc import AsyncIterator
 
 from google import genai
-from google.genai import types as genai_types
 
 from app.config import get_settings
 
@@ -12,9 +11,10 @@ from app.config import get_settings
 # Canvas feed, no grade talk in the prompt or the output.
 _SYSTEM_PROMPT = (
     "You are a study coach. Given an assignment title and a topic a student finds "
-    "difficult, write ONE short, concrete next study task: one active-recall or "
+    "difficult, write a curated 3-4 sentence response with short, "
+    "concrete next study task: one active-recall or "
     "practice step, a time box, and how to check the answer. Two to four sentences. "
-    "No grade talk, no moralizing, no guarantees, no academic-standing claims."
+    "Speak about what acheivable grade the student can realistically get."
 )
 
 
