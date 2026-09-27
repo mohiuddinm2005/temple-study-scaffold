@@ -2,7 +2,7 @@ import asyncio
 import time
 from collections.abc import AsyncIterator
 
-from google import genai
+from google import genai, genai_types
 
 from app.config import get_settings
 
@@ -61,8 +61,8 @@ async def generate_study_task(
         return
 
     prompt = (
-        f"Assignment: {assignment_title[:300]}\n"
-        f"Difficult topic: {difficult_topic[:300]}\n"
+        f"Assignment: {assignment_title[:500]}\n"
+        f"Difficult topic: {difficult_topic[:500]}\n"
         f"Minutes available: {minutes}"
     )
     client = genai.Client(api_key=settings.gemini_api_key)
