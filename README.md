@@ -1,178 +1,235 @@
-# Temple Study — weekend project scaffold
-
-This repository is a **partial study app and team handoff**. Pilot authentication and manual Canvas calendar import are implemented; the other planned features still have route stubs and implementation notes. This project is not affiliated with Temple University.
-
-## Goal and weekend boundary
-
-Help a student see Canvas deadlines, work out the average needed on remaining coursework, choose one small study action, and receive a 48-hour and 24-hour browser push reminder for a timed assignment. Students provide their own syllabus grading weights and target; a calendar feed does not contain grades. The app should favor short focus sessions and low-friction next steps for students rebuilding study habits amid phone alerts, social media, avoidance, and task switching. Avoid shame-based language, unsupported claims of academic standing, and grade guarantees.
-
-**Weekend MVP:** pilot account flow; manual Canvas iCal import; upcoming events; syllabus-input grade scenario; one AI or template study task; focus timer; per-device browser push; single-VM Azure demo. **Documented future options:** Google Calendar OAuth, Apple calendar subscription/export, SMS, recurring sync, and richer grading. Do not implement these expansions without the team's approval.
-
-## Repository map and primary ownership
-
-| Path | Purpose | Owner |
-| --- | --- | --- |
-| `app/page.tsx`, `app/layout.tsx`, `app/globals.css`, `components/Dashboard.tsx` | Student sign-in, Canvas import/refresh and event list; other dashboard features pending | 1 Frontend |
-| `app/api/auth/`, `app/api/grades/`, `lib/auth/`, `lib/grades/`, `lib/db/` | Account/session, deterministic grade scenario, SQLite schema and migrations | 2 Backend |
-| `app/api/canvas/`, `app/api/study/`, `lib/canvas/`, `lib/ai/` | iCal import, safe feed handling, one study task | 3 Canvas + AI |
-| `app/api/push/`, `app/api/reminders/`, `lib/reminders/`, `worker/`, `infra/` | Push subscription, durable reminders, Azure deployment | 4 Reminders + deployment |
-| `app/api/assignments/` | Shared event contract and local completion; owners 2 and 3 agree schema, owner 4 handles job cancellation | Shared |
-| `tests/unit/`, `tests/integration/` | Each owner adds behavior tests for their slice | Shared |
-| `docs/`, `.github/workflows/ci.yml`, `.env.example` | Contracts, provider notes, CI and secret names | Shared |
-
-```mermaid
-flowchart TD
-  UI["Browser UI"] --> API["Next.js API routes"]
-  API --> SQLite[("SQLite on Azure VM disk")]
-  API --> Canvas["Canvas iCal feed"]
-  API --> Model["Optional AI model"]
-  Worker["Reminder worker"] --> SQLite
-  Worker --> Push["Web Push service"]
-```
-
-The browser and server are one Next.js TypeScript app to minimize setup. A separate Node worker reads the **same local SQLite file** and delivers Web Push. Use WAL mode and a persistent volume on **one host**; do not run SQLite over a shared network filesystem. Start with no Redis cache: the data is small and SQLite plus browser-side fetch state suffices. Introduce an in-process short TTL only if measured import/render latency requires it; invalidate it on a sync. Azure VM plus reverse proxy/HTTPS is the smallest deployment for the app and worker; see [deployment notes](docs/DEPLOYMENT.md).
-
-## Local scaffold setup
-
-1. Install Node.js 24 and npm. Run `npm ci`.
-2. Run `npm run dev`; open `http://localhost:3000` and confirm the placeholder page appears.
-3. Run `npm run typecheck` and `npm run build` before opening a PR. CI does both.
-4. Copy `.env.example` to `.env.local` **when implementing the relevant feature**. Generate real keys privately; do not commit the file or any student's Canvas link.
-
-Pilot registration/login, Canvas iCal import and manual refresh, and assignment listing are implemented. Grades, AI, worker, push, and SMS routes remain placeholders. Set a random 32-byte `APP_ENCRYPTION_KEY` (64 hex characters or base64) in `.env.local`; generate a key with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Keep this key stable: changing it makes stored feed URLs unreadable. Run `npm test` for synthetic-feed tests.
-
-## Product behavior to implement
-
-1. The student signs in and pastes their own Temple Canvas iCal URL. The server validates the exact Temple Canvas host, refuses redirects, limits response size/time, encrypts the secret URL, parses events, deduplicates by Canvas UID and recurrence ID, and handles timezone/date-only entries. A manual refresh updates changed deadlines and cancels obsolete reminders. **Never put the example personal URL in source, logs, fixtures, or issues.** Canvas calendar data does not prove an assignment is submitted.
-2. The student enters a syllabus-based numeric pass target, earned weighted percentage points, and remaining weight. Return `(target − earned points) / (remaining weight / 100)` and label impossible (>100%), achieved (≤0%), and missing-weight cases. Temple's D− may pass generally, while General Education and some majors require C− or higher; the student must select their course's actual threshold. This is a scenario calculation, not a GPA or official standing assessment.
-3. The student chooses one assignment, states a difficult topic and time available, and gets **one actionable short task** plus a focus timer. A model may tailor the task, but the grade computation stays deterministic. Use a server-side bounded request, an explicit model and token cap, no full feed or student identity in the prompt, a timeout, and a clearly labeled template fallback. Store usage for cost review.
-4. The student grants Web Push permission per device. For a confirmed timed assignment, create idempotent reminder jobs at 48 and 24 hours before due time; skip already-passed offsets. The worker sends, retries briefly, records acceptance/errors, and cancels jobs when deadlines change or the student marks work complete. Never imply that provider acceptance guarantees a displayed notification. On supported iPhones, browser push requires adding the web app to the Home Screen.
-
-## Four-person delivery plan
-
-| Owner | Primary deliverable | Friday | Saturday | Sunday acceptance |
-| --- | --- | --- | --- | --- |
-| 1 Frontend | Responsive dashboard and focus flow | Agree API shapes, build page skeleton | Forms, states and accessibility | Demo from import to next study action |
-| 2 Backend | SQLite, auth, grading | Schema, route contracts | Account and grade logic | Isolation and grade edge-case tests |
-| 3 Canvas + AI | Safe feed import and study task | Obtain **synthetic** fixture, parser spike | Manual import, model/template boundary | Deduplication and prompt budget checks |
-| 4 Reminders + Azure | Push worker and demo deployment | HTTPS/VM and subscription spike | Queue, worker, deploy | 24/48 scheduler tests and test push |
-
-Each owner adds relevant tests and documents configuration. Friday agree `docs/API.md` and `lib/db/schema.sql` before parallel branches. Integrate by Saturday evening, rehearse Sunday. Use short PRs; owner 2 reviews changes to shared DB schema, owner 1 checks user-facing copy, owner 4 checks notification behavior. Do not block the demo on external OAuth approval, SMS sender setup, or platform-specific Apple APIs.
-
-## Acceptance and honest demo
-
-- Import a consenting test feed or synthetic fixture, refresh twice with no duplicate events, and show a changed due time rescheduling a job.
-- Calculate a transparent needed grade from provided weights; state which threshold and syllabus were used.
-- Generate one short task and show which mode produced it (model or template).
-- Deliver an immediate **labeled test push** and use clock-controlled tests for 48/24-hour scheduling. Do not claim to have waited 48 hours during the demo.
-- Sign in as a second student and verify no cross-user feed, event, study plan, or device access.
-
-## Design documents
-
-- [API and data contract](docs/API.md)
-- [Canvas, Google, and Apple integration references](docs/integrations/README.md)
-- [Grade logic](docs/GRADING.md)
-- [AI and study habits](docs/AI_AND_HABITS.md)
-- [Notifications](docs/NOTIFICATIONS.md)
-- [Azure deployment and growth path](docs/DEPLOYMENT.md)
-
-## GitHub handoff
-
-This scaffold can be committed directly. In the extracted directory: `git init`, `git add .`, `git commit -m "Add Temple Study weekend scaffold"`, then create a GitHub repository and push according to GitHub's instructions. Verify `.env.local`, personal Canvas URLs, database files, and API keys are **absent** from `git status` before committing. There is no Git remote or GitHub repo configured here.
 # Nemo.AI
 
-Refactor of the original `temple-study-scaffold` (Next.js full-stack) into a
-Python **FastAPI** backend and a **TypeScript** (Vite + React) frontend,
-connected over REST + a WebSocket. The product scope is unchanged from the
-original README — this is a structural/stack refactor, not a feature change,
-except for the study-task route, which now streams from **Google Gemini**
-token-by-token instead of being a stub.
+Nemo.AI helps students organize Temple Canvas deadlines, calculate the average needed on remaining coursework, and start a focused study task. The application uses a **Python FastAPI backend** and a **React + TypeScript frontend served by Vite**, with SQLite for local persistence.
 
-```
-nemo-ai/
-  backend/     FastAPI app, SQLite, Canvas import, auth, Gemini WebSocket
-  frontend/    Vite + React + TypeScript SPA
-```
+Run the backend and frontend in separate terminals. All commands below assume the repository contains `backend/` and `frontend/`; the repository folder itself may still be named `temple-study-scaffold`.
 
-## What moved where
+## Current functionality
 
-| Original | New |
+| Feature | Current behavior |
 | --- | --- |
-| `app/api/auth/*` | `backend/app/routers/auth.py` |
-| `app/api/canvas/import` | `backend/app/routers/canvas.py` + `backend/app/canvas_ics.py` |
-| `app/api/grades/scenario` | `backend/app/routers/grades.py` |
-| `app/api/assignments/*` | `backend/app/routers/assignments.py` |
-| `app/api/study/plan` (stub) | `backend/app/routers/study.py` — now a **WebSocket** (`/ws/study-plan`) streaming from Gemini, see below |
-| `lib/auth`, `lib/db`, `lib/canvas` | `backend/app/security.py`, `db.py`, `canvas_ics.py` |
-| `components/Dashboard.tsx` | `frontend/src/components/Dashboard.tsx` (same behavior, calls the FastAPI backend) |
-| — | `frontend/src/components/StudyPlan.tsx` — new UI for the Gemini feature |
-| `app/api/push/*`, `app/api/reminders/*`, `lib/reminders`, `worker/` | **Not ported.** These were stubs/TODOs in the original (owner 4's slice) and stayed out of scope here. `backend/app/routers/push.py` and `reminders.py` keep the same `501 Not Implemented` stubs so the contract in `docs/API.md` still holds. |
+| Accounts | Registration, login, logout, and session cookies are implemented. Registration requires a password of at least 12 characters. |
+| Canvas calendar | Import and manually refresh a private Temple Canvas iCal feed. Events are deduplicated and stored in SQLite. |
+| Dashboard | Displays imported items, course groups derived from event titles, a calendar, and assignment lists. |
+| Grade scenarios | Computes the required average from a target percentage, earned weighted percentage points, and remaining weight. |
+| Assignment updates | `PATCH /api/assignments/{id}` updates local completion and reminder eligibility. It does not update Canvas submission status or schedule/cancel reminder jobs. |
+| Study tasks | Authenticated WebSocket streams a short task from Google Gemini, with a labeled template fallback when no model text is available. |
+| SMS test | `POST /api/reminders/test` queues a Twilio SMS in a background task. A successful HTTP response means queued, not delivered. |
+| Browser push | `/api/push/subscribe` remains a 501 placeholder. |
+| Scheduled reminders | Automatic 24/48-hour scheduling and a reminder worker are not implemented. |
 
-Everything ported was tested end-to-end while building this (register →
-login → session cookie → grade scenario → assignments list → origin
-rejection; Canvas ICS parsing including recurrence expansion, all-day
-events, and the cancelled/too-frequent guards; the WebSocket auth and
-template-fallback path).
+Google/Apple calendar synchronization and a focus timer are not implemented in the current application. Canvas iCal supplies calendar events, not gradebook data or proof of assignment submission. Students must obtain grading weights and the appropriate passing target from their course syllabus.
 
-## Why a WebSocket for the study task
+## Stack and source ownership
 
-The original spec (`docs/AI_AND_HABITS.md`) called for one bounded AI
-request per study session with a deterministic template fallback. That's
-still true here — the WebSocket sends **one response per connection**, just
-streamed token-by-token instead of returned as one JSON blob, so the student
-sees the task appear as it's generated rather than waiting on a spinner.
-Same constraints as before: small input (assignment title + difficult topic
-+ minutes only, no name/email/full feed/grades), hard output-token cap,
-timeout, and a labeled template fallback if the model is slow, errors, or
-`GEMINI_API_KEY` isn't set.
+| Layer | Technology | Main location |
+| --- | --- | --- |
+| Frontend | React 19, TypeScript, Vite 6, CSS | `frontend/src/` |
+| HTTP API and WebSocket | FastAPI, Uvicorn, Pydantic | `backend/app/main.py`, `backend/app/routers/` |
+| Database | Python `sqlite3`, SQLite with WAL enabled | `backend/app/db.py` |
+| Authentication and feed encryption | Session cookies, scrypt password hashes, AES-GCM | `backend/app/security.py` |
+| Calendar import | HTTPX, `icalendar`, `recurring-ical-events` | `backend/app/canvas_ics.py` |
+| AI | Google Gen AI SDK | `backend/app/gemini_client.py` |
+| SMS | Twilio SDK and FastAPI background tasks | `backend/app/twilio_client.py`, `backend/app/routers/reminders.py` |
 
-## Running it locally
+The active frontend starts at `frontend/src/main.tsx`, which renders `App.tsx`. The backend starts at `backend/app/main.py`. The course helper belongs at `frontend/src/lib/course.ts`. Run npm commands inside `frontend/` and backend commands inside `backend/`.
 
-**Backend**
+## Local setup
+
+### Prerequisites
+
+- Python 3.12 and Node.js 24 are the versions used for the reviewed local checks. npm is included with Node.js.
+- Use `localhost` consistently for browser, API, and WebSocket URLs. The default frontend origin is `http://localhost:5173`.
+- Internet access is needed to install dependencies. Gemini and Twilio credentials are optional for starting the app; their live services require configured credentials.
+
+### 1. Install backend dependencies
+
+From the repository root, open a terminal.
+
+**Windows PowerShell:**
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+**macOS/Linux:**
+
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # fill in APP_ENCRYPTION_KEY at minimum
-uvicorn app.main:app --reload --port 8000
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt
 ```
-Generate `APP_ENCRYPTION_KEY` with:
+
+Reuse an existing backend virtual environment if it already contains the project dependencies. These commands use its Python executable directly, so activation is optional.
+
+### 2. Configure the backend
+
+The reviewed repository does not contain `backend/.env.example`. **Create `backend/.env` manually in your editor if it does not exist.** If it already exists, retain its database path, encryption key, and credentials.
+
+For a new installation, generate an encryption key:
+
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-**Frontend**
+On macOS/Linux, use `python3` if `python` is unavailable. Copy the generated value into the configuration below, replacing `PASTE_YOUR_64_HEX_CHARACTER_KEY`:
+
+```dotenv
+DATABASE_PATH=./data/study.db
+APP_ENCRYPTION_KEY=PASTE_YOUR_64_HEX_CHARACTER_KEY
+ALLOWED_ORIGINS=http://localhost:5173
+COOKIE_SECURE=false
+
+# Optional: leave the API key blank to use the study-task template.
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MAX_OUTPUT_TOKENS=300
+GEMINI_TIMEOUT_SECONDS=12
+
+# Optional: required only for live SMS delivery.
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+```
+
+Keep the encryption key stable: replacing it makes existing saved Canvas feed URLs unreadable. SQLite creates its directory and schema on first database access. Relative paths and `.env` loading are based on the backend process's working directory, which is why startup commands run from `backend/`.
+
+### 3. Start the backend
+
+In the same terminal, still inside `backend/`:
+
+**Windows PowerShell:**
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+**macOS/Linux:**
+
+```bash
+./.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+```
+
+With the environment activated, `python -m uvicorn app.main:app --reload --port 8000` is equivalent.
+
+- Health check: <http://localhost:8000/health> should return `{"ok":true}`.
+- HTTP API documentation: <http://localhost:8000/docs>.
+
+### 4. Configure and start the frontend
+
+Open a second terminal at the repository root:
+
 ```bash
 cd frontend
-npm install
-cp .env.example .env.local   # defaults already point at localhost:8000
-npm run dev
+npm ci
 ```
-Open `http://localhost:5173`.
 
-## Auth cookie across origins
+The reviewed repository does not contain `frontend/.env.example`. The code already defaults to the URLs below. To make the configuration explicit, create `frontend/.env.local` in your editor, or retain an existing file with these values:
 
-The frontend and backend are now separate origins (ports 5173 and 8000), so
-session cookies need `credentials: 'include'` on every request (already set
-in `frontend/src/api/client.ts`) and CORS on the backend must name the exact
-frontend origin — `ALLOWED_ORIGINS` in `backend/.env` (wildcard `*` won't
-work with credentialed requests). In dev, `SameSite=Lax` is enough since
-both are `localhost`. In production, if the frontend and backend are on
-different domains, set `COOKIE_SECURE=true` so the backend switches to
-`SameSite=None; Secure`, and serve both over HTTPS.
+```dotenv
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_BASE_URL=ws://localhost:8000
+```
 
-## Testing
+Start Vite:
 
-- Backend: `cd backend && python -m pytest` (add tests under `backend/tests/`
-  — none are included yet; the original repo's `tests/integration/canvas-import.test.ts`
-  was TypeScript and wasn't ported).
-- Frontend: `cd frontend && npm run typecheck && npm run build`.
+```bash
+npm run dev -- --strictPort
+```
 
-## Not done here (carried over as TODOs from the original)
+Open <http://localhost:5173>. `--strictPort` prevents Vite from silently switching to a port that the backend origin allowlist does not permit. Keep both terminals running; stop each with `Ctrl+C`.
 
-- Push notifications (`VAPID_*`, `/api/push/subscribe`)
-- The 48/24-hour reminder scheduler and worker
-- `PATCH /api/assignments/{id}` (needs the reminders piece to cancel jobs on completion)
+## Environment variable reference
 
-These were unfinished in the original repo too (owner 4's slice) — porting
-their *stub* status was the goal here, not implementing them.
+| Variable | Location | Purpose/default |
+| --- | --- | --- |
+| `DATABASE_PATH` | `backend/.env` | SQLite file; defaults to `./data/study.db` relative to `backend/`. |
+| `APP_ENCRYPTION_KEY` | `backend/.env` | Required for saved Canvas feeds; 32 random bytes encoded as 64 hex characters or base64. |
+| `ALLOWED_ORIGINS` | `backend/.env` | Comma-separated frontend origins; defaults to `http://localhost:5173`. Used for CORS and origin checks. |
+| `COOKIE_SECURE` | `backend/.env` | Defaults to `false` for local HTTP. `true` enables Secure cookies and switches SameSite to None; requires HTTPS. |
+| `GEMINI_API_KEY` | `backend/.env` | Optional; absence selects the template path. |
+| `GEMINI_MODEL` | `backend/.env` | Configured default is `gemini-2.5-flash`; live access depends on the provider/account. |
+| `GEMINI_MAX_OUTPUT_TOKENS` | `backend/.env` | Integer output cap; defaults to `300`. |
+| `GEMINI_TIMEOUT_SECONDS` | `backend/.env` | Integer request timeout; defaults to `12`. |
+| `TWILIO_ACCOUNT_SID` | `backend/.env` | Twilio account identifier for SMS. |
+| `TWILIO_AUTH_TOKEN` | `backend/.env` | Twilio credential for SMS. |
+| `TWILIO_PHONE_NUMBER` | `backend/.env` | Twilio sending number. |
+| `VITE_API_BASE_URL` | `frontend/.env.local` | HTTP API base URL, without a trailing slash. |
+| `VITE_WS_BASE_URL` | `frontend/.env.local` | WebSocket base URL, without a trailing slash. |
+
+Do not leave integer or boolean settings blank: omit them to use defaults, or supply valid values. Restart the backend after configuration changes; restart Vite after frontend environment changes. `VITE_*` values are exposed to the browser and must never contain Gemini, Twilio, or encryption secrets.
+
+Keep `.env` files, private Canvas links, local databases, virtual environments, and dependency folders out of Git and shared source archives. Preserve the local database and its encryption key when cleaning up the repository.
+
+## API behavior
+
+Use `/docs` for HTTP request schemas. The active routes are:
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/health` | Process health response. |
+| POST | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Account and session management. |
+| GET | `/api/auth/me` | Current session; 401 when signed out is expected. |
+| POST | `/api/canvas/import` | Send `{"feedUrl":"..."}` to import/replace a feed, or `{}` to refresh a saved feed. |
+| GET | `/api/assignments` | Current student's imported events and sync status. |
+| PATCH | `/api/assignments/{id}` | Update `completed` and/or `reminderEligible` booleans. |
+| POST | `/api/grades/scenario` | Accepts `target`, `earnedPoints`, and `remainingWeight`, all in percentage units. |
+| GET/POST | `/api/push/subscribe` | 501; not implemented. |
+| POST | `/api/reminders/test` | Accepts `{"phone_number":"..."}` and queues a test SMS. |
+| WebSocket | `/ws/study-plan` | Authenticated streamed study-task requests. |
+
+The browser API client includes cookies with requests. Account writes, Canvas imports, grade calculations, and assignment updates check the allowed origin. Assignment data is scoped to the signed-in student. **The SMS test route currently lacks authentication and rate limiting; restrict access before exposing it publicly.** Its response confirms queueing only, and background delivery failures are not returned in that response.
+
+Grade example: target `70`, earned weighted points `42`, remaining weight `40` yields a required average of `70%`: `(70 - 42) / (40 / 100)`. Earned points means contribution to the final course percentage, not raw assignment points or the current gradebook average.
+
+### Study WebSocket contract
+
+The server checks the session and Origin when opening the connection. Send:
+
+```json
+{"assignmentTitle":"Algebra practice","difficultTopic":"Factoring","minutes":15}
+```
+
+It emits `{"type":"chunk","text":"..."}` messages, then `{"type":"done","source":"model"}` or `{"type":"done","source":"template"}`. Validation errors use `{"type":"error","message":"..."}`.
+
+**One connection can accept multiple sequential requests.** The current frontend opens a connection for each submitted task and closes the previous connection before starting another. A `done` message does not close the server connection. Requests use assignment title, difficult topic, and time available; the model does not calculate grades. If generation fails after text has already streamed, the current implementation keeps that partial text and labels it `model`; template fallback applies when no model text was produced.
+
+## Verification and troubleshooting
+
+Run the frontend checks from `frontend/`:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+The production build is written to `frontend/dist/`. `npm run preview` is a local build preview, not a production deployment. Its port differs from the development server; backend origin configuration must permit the actual preview origin if testing API calls there.
+
+There is **no populated Python test suite in the reviewed repository**. `backend/test_grades.py` is empty, and `pytest` is not listed in `backend/requirements.txt`. Do not treat a pytest command as an existing verification step. Port the useful legacy Canvas test cases to backend tests and add a development test dependency before adopting that command.
+
+For a manual smoke check: verify `/health`, register a synthetic account, log out and back in, calculate the 70/42/40 example, and check assignment listing. To exercise the study UI, import a consenting test feed and request a task. With no Gemini key, the task should be labeled as a template. Test SMS only with configured credentials and a recipient who has agreed to receive it.
+
+| Symptom | Check |
+| --- | --- |
+| `Could not import module "app.main"` | Run Uvicorn from `backend/`; confirm `backend/app/main.py` exists. Run `python -c "from app.main import app"` with the backend environment active to reveal the actual import error. |
+| Missing Python package | Install requirements using the same virtual-environment Python that launches Uvicorn. |
+| Missing `../lib/course` import | Place the helper at `frontend/src/lib/course.ts`. Move only the course helper from the old root `lib/course/course.ts`, not the old server modules. |
+| CORS/Origin rejection | Open the frontend at `http://localhost:5173`; match `ALLOWED_ORIGINS` exactly. Avoid mixing `localhost` and `127.0.0.1`. |
+| Canvas encryption error | Set a valid key in `backend/.env`; retain the original key for previously encrypted feeds. |
+| Study task uses a template | Expected without a Gemini key. With a key configured, check backend logs for provider or timeout errors. |
+| SMS says queued but does not arrive | Check backend logs and Twilio delivery status; queueing is not delivery confirmation. |
+
+Review baseline: backend health, account/session flow, grade calculation, listing, origin checks, and WebSocket template fallback passed local smoke checks. The uploaded frontend failed on the missing course helper; its build passed in a diagnostic copy with the helper at the correct path. These checks do not establish live Canvas, Gemini, or Twilio delivery success.
+
+## Team ownership
+
+| Member | Primary responsibility | Owned areas |
+| --- | --- | --- |
+| 1 — Frontend | Dashboard, navigation, forms, responsive styles, UI error states | `frontend/src/App.tsx`, `components/`, `layout/`, `styles.css`, `lib/course.ts` |
+| 2 — Backend and data | SQLite, authentication, sessions, grade calculations, shared schemas | `backend/app/db.py`, `security.py`, `dependencies.py`, `schemas.py`, auth/grades/assignments routers |
+| 3 — Canvas and AI | Feed validation/parsing, manual sync, Gemini behavior, WebSocket contract | `backend/app/canvas_ics.py`, `gemini_client.py`, canvas/study routers; coordinate `frontend/src/api/studyPlanSocket.ts` with member 1 |
+| 4 — Notifications and deployment | Twilio test flow, pending push/scheduler work, configuration and hosting | `backend/app/twilio_client.py`, reminders/push routers, deployment setup |
+
+Each member maintains tests and documentation for their area. Agree on request/response changes before modifying both sides. Member 2 reviews shared schema changes; members 1 and 3 coordinate streamed study-task behavior. Track new capabilities as explicit tasks rather than describing planned work as implemented.

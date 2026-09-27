@@ -5,5 +5,3 @@ The **weekend implementation target** is a user-supplied Temple Canvas iCalendar
 - [Canvas iCalendar plan](CANVAS.md)
 - [Google Calendar API plan](GOOGLE_CALENDAR.md)
 - [Apple Calendar web options](APPLE_CALENDAR.md)
-
-Do not paste or commit any real student's private feed token. The example link from the planning conversation is deliberately omitted.

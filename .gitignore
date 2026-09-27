@@ -1,7 +1,7 @@
 # Next.js / Node
 node_modules/
 .next/
-
+./venv
 
 # Backend
 backend/.venv/
