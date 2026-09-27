@@ -1,4 +1,4 @@
-import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomUUID, scryptSync, randomBytes } from 'node:crypto';
 import { sameOrigin, startSession } from '@/lib/auth/sessions';
 import { getDb } from '@/lib/db/client';
 
@@ -9,15 +9,9 @@ export async function POST(request: Request) {
   let input: unknown;
   try { input = await request.json(); } catch { return Response.json({ error: 'Invalid JSON' }, { status: 400 }); }
   if (!input || typeof input !== 'object' || Array.isArray(input)) return Response.json({ error: 'Invalid input' }, { status: 400 });
-  const { email, password, inviteCode } = input as Record<string, unknown>;
+  const { email, password } = input as Record<string, unknown>;
   if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      typeof password !== 'string' || password.length < 12 || password.length > 256 ||
-      typeof inviteCode !== 'string') return Response.json({ error: 'Invalid registration details' }, { status: 400 });
-  const expected = process.env.PILOT_INVITE_CODE;
-  if (!expected) return Response.json({ error: 'Registration is not configured' }, { status: 503 });
-  const providedHash = Buffer.from(scryptSync(inviteCode, 'pilot-invite', 32));
-  const expectedHash = Buffer.from(scryptSync(expected, 'pilot-invite', 32));
-  if (!timingSafeEqual(providedHash, expectedHash)) return Response.json({ error: 'Invalid invite code' }, { status: 403 });
+      typeof password !== 'string' || password.length < 12 || password.length > 256) return Response.json({ error: 'Invalid registration details' }, { status: 400 });
 
   const normalizedEmail = email.trim().toLowerCase();
   const db = getDb();

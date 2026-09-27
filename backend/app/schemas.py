@@ -4,9 +4,6 @@ from pydantic import BaseModel, Field
 class RegisterRequest(BaseModel):
     email: str = Field(max_length=254)
     password: str = Field(min_length=12, max_length=256)
-    invite_code: str = Field(alias="inviteCode")
-
-    model_config = {"populate_by_name": True}
 
 
 class LoginRequest(BaseModel):

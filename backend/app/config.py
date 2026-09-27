@@ -8,12 +8,11 @@ class Settings(BaseSettings):
 
     database_path: str = "./data/study.db"
     app_encryption_key: str = ""
-    pilot_invite_code: str = ""
     allowed_origins: str = "http://localhost:5173"
     cookie_secure: bool = False
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
     gemini_max_output_tokens: int = 300
     gemini_timeout_seconds: int = 12
     

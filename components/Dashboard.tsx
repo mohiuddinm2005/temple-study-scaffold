@@ -8,7 +8,6 @@ type EventResponse = { assignments: Assignment[]; lastSyncedAt: string | null; h
 export default function Dashboard() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
   const [feedUrl, setFeedUrl] = useState('');
   const [signedIn, setSignedIn] = useState(false);
   const [events, setEvents] = useState<EventResponse | null>(null);
@@ -32,12 +31,11 @@ export default function Dashboard() {
     setMessage('');
     try {
       const response = await fetch(`/api/auth/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, ...(action === 'register' ? { inviteCode } : {}) }) });
+        body: JSON.stringify({ email, password }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Sign in failed');
       setSignedIn(true);
       setPassword('');
-      setInviteCode('');
       await loadEvents();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Sign in failed'); }
     finally { setBusy(false); }
@@ -79,7 +77,6 @@ export default function Dashboard() {
         <form onSubmit={(event) => submitAuth(event, 'register')}>
           <label>Email <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
           <label>Password (12 characters minimum) <input type="password" autoComplete="new-password" minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
-          <label>Invite code <input type="password" value={inviteCode} onChange={(event) => setInviteCode(event.target.value)} required /></label>
           <button disabled={busy}>Create account</button>
         </form>
       </details>

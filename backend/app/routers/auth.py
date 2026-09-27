@@ -5,13 +5,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from app.config import get_settings
+
 from app.dependencies import db_dep, optional_user_id, require_same_origin
 from app.schemas import LoginRequest, RegisterRequest, UserSummary
 from app.security import (
     end_session,
     hash_password,
-    invite_code_matches,
     start_session,
     verify_password,
 )
@@ -31,11 +30,7 @@ def register(
 ):
     if not _EMAIL_RE.match(body.email):
         raise HTTPException(status_code=400, detail="Invalid registration details")
-    expected = get_settings().pilot_invite_code
-    if not expected:
-        raise HTTPException(status_code=503, detail="Registration is not configured")
-    if not invite_code_matches(body.invite_code, expected):
-        raise HTTPException(status_code=403, detail="Invalid invite code")
+
 
     normalized_email = body.email.strip().lower()
     if db.execute("SELECT id FROM users WHERE email = ?", (normalized_email,)).fetchone():

@@ -2,7 +2,8 @@ import asyncio
 import time
 from collections.abc import AsyncIterator
 
-from google import genai, genai_types
+from google import genai
+from google.genai import types as genai_types
 
 from app.config import get_settings
 
@@ -14,7 +15,7 @@ _SYSTEM_PROMPT = (
     "difficult, write a curated 3-4 sentence response with short, "
     "concrete next study task: one active-recall or "
     "practice step, a time box, and how to check the answer. Two to four sentences. "
-    "Speak about what acheivable grade the student can realistically get."
+    "Speak about what achievable grade the student can realistically get."
 )
 
 
